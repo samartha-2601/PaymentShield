@@ -14,8 +14,10 @@ from app.api.payments_data import router as payments_data_router
 from app.api.alerts import router as alerts_router
 from app.api.dashboard import router as dashboard_router
 
+
 import app.models.payment
 import app.models.alert
+import app.models.processed_event
 
 app = FastAPI(
     title="PaymentShield API",

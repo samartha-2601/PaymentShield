@@ -11,6 +11,7 @@ from app.core.database import SessionLocal
 
 from app.models.payment import Payment
 from app.models.alert import Alert
+from app.models.processed_event import ProcessedEvent
 
 from app.services.risk_engine import (
     calculate_risk_score,
@@ -48,19 +49,53 @@ async def stripe_webhook(request: Request):
         )
 
     event_type = event["type"]
+    event_id = event["id"]
 
-    if event_type == "checkout.session.completed":
+    db: Session = SessionLocal()
 
-        data = event["data"]["object"]
+    try:
 
-        db: Session = SessionLocal()
+        # =====================================
+        # Replay Attack Protection
+        # =====================================
 
-        try:
+        existing_event = (
+            db.query(ProcessedEvent)
+            .filter(
+                ProcessedEvent.stripe_event_id == event_id
+            )
+            .first()
+        )
 
-            amount = data.get(
-                "amount_total",
-                0
-            ) / 100
+        if existing_event:
+
+            print(
+                f"[SECURITY] Duplicate event blocked: {event_id}"
+            )
+
+            return {
+                "received": True,
+                "duplicate": True
+            }
+
+        processed_event = ProcessedEvent(
+            stripe_event_id=event_id
+        )
+
+        db.add(processed_event)
+        db.commit()
+
+        # =====================================
+        # Process Checkout Event
+        # =====================================
+
+        if event_type == "checkout.session.completed":
+
+            data = event["data"]["object"]
+
+            amount = (
+                data.get("amount_total", 0) / 100
+            )
 
             risk_score = calculate_risk_score(
                 amount
@@ -101,9 +136,9 @@ async def stripe_webhook(request: Request):
                 db.add(new_alert)
                 db.commit()
 
-        finally:
+    finally:
 
-            db.close()
+        db.close()
 
     return {
         "received": True
