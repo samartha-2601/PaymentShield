@@ -1,7 +1,14 @@
-from fastapi import APIRouter, Request
+import stripe
+
+from fastapi import APIRouter
+from fastapi import Request
+from fastapi import HTTPException
+
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import SessionLocal
+
 from app.models.payment import Payment
 from app.models.alert import Alert
 
@@ -19,26 +26,53 @@ router = APIRouter(
 @router.post("/stripe")
 async def stripe_webhook(request: Request):
 
-    payload = await request.json()
+    payload = await request.body()
 
-    event_type = payload.get("type")
+    sig_header = request.headers.get(
+        "stripe-signature"
+    )
+
+    try:
+
+        event = stripe.Webhook.construct_event(
+            payload,
+            sig_header,
+            settings.STRIPE_WEBHOOK_SECRET
+        )
+
+    except Exception:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid Stripe signature"
+        )
+
+    event_type = event["type"]
 
     if event_type == "checkout.session.completed":
 
-        data = payload["data"]["object"]
+        data = event["data"]["object"]
 
         db: Session = SessionLocal()
 
         try:
 
-            amount = data.get("amount_total", 0) / 100
+            amount = data.get(
+                "amount_total",
+                0
+            ) / 100
 
-            risk_score = calculate_risk_score(amount)
+            risk_score = calculate_risk_score(
+                amount
+            )
 
             payment = Payment(
-                stripe_payment_id=data.get("payment_intent"),
+                stripe_payment_id=data.get(
+                    "payment_intent"
+                ),
                 customer_email=data.get(
-                    "customer_details", {}
+                    "customer_details",
+                    {}
                 ).get("email"),
                 amount=amount,
                 status="succeeded",
@@ -49,7 +83,9 @@ async def stripe_webhook(request: Request):
             db.commit()
             db.refresh(payment)
 
-            alert = determine_alert_type(risk_score)
+            alert = determine_alert_type(
+                risk_score
+            )
 
             if alert:
 
