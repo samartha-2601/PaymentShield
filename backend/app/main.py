@@ -9,6 +9,7 @@ from app.core.database import engine
 
 from app.api.config_test import router as config_router
 from app.api.payments import router as payment_router
+from app.api.webhooks import router as webhook_router
 
 import app.models.payment
 import app.models.alert
@@ -33,6 +34,7 @@ app.include_router(health_router)
 Base.metadata.create_all(bind=engine)
 app.include_router(config_router)
 app.include_router(payment_router)
+app.include_router(webhook_router)
 
 @app.get("/")
 def root():

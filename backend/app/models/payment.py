@@ -2,6 +2,9 @@ from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import Float
+from sqlalchemy import DateTime
+
+from datetime import datetime
 
 from app.models.base import Base
 
@@ -20,3 +23,8 @@ class Payment(Base):
     status = Column(String)
 
     risk_score = Column(Integer, default=0)
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
