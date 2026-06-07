@@ -1,6 +1,9 @@
 from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import String
+from sqlalchemy import DateTime
+
+from datetime import datetime
 
 from app.models.base import Base
 
@@ -17,3 +20,8 @@ class Alert(Base):
     severity = Column(String)
 
     description = Column(String)
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )

@@ -23,7 +23,7 @@ def create_checkout_session():
                     "product_data": {
                         "name": "PaymentShield Demo Product"
                     },
-                    "unit_amount": 2000,
+                    "unit_amount": 150000,
                 },
                 "quantity": 1,
             }
