@@ -13,9 +13,17 @@ from app.models.payment import Payment
 from app.models.alert import Alert
 from app.models.processed_event import ProcessedEvent
 
+from app.services.audit_service import (
+    create_audit_log
+)
+
 from app.services.risk_engine import (
     calculate_risk_score,
     determine_alert_type
+)
+
+from app.services.card_testing import (
+    detect_card_testing
 )
 
 router = APIRouter(
@@ -69,8 +77,12 @@ async def stripe_webhook(request: Request):
 
         if existing_event:
 
-            print(
-                f"[SECURITY] Duplicate event blocked: {event_id}"
+            create_audit_log(
+                db,
+                event_id,
+                event_type,
+                "DUPLICATE",
+                "Replay attack prevented"
             )
 
             return {
@@ -85,6 +97,14 @@ async def stripe_webhook(request: Request):
         db.add(processed_event)
         db.commit()
 
+        create_audit_log(
+            db,
+            event_id,
+            event_type,
+            "ACCEPTED",
+            "Stripe event processed"
+        )
+
         # =====================================
         # Process Checkout Event
         # =====================================
@@ -93,22 +113,24 @@ async def stripe_webhook(request: Request):
 
             data = event["data"]["object"]
 
-            amount = (
-                data.get("amount_total", 0) / 100
-            )
+            amount = data["amount_total"] / 100
 
             risk_score = calculate_risk_score(
                 amount
             )
 
+            customer_email = None
+
+            try:
+                customer_email = (
+                    data["customer_details"]["email"]
+                )
+            except Exception:
+                pass
+
             payment = Payment(
-                stripe_payment_id=data.get(
-                    "payment_intent"
-                ),
-                customer_email=data.get(
-                    "customer_details",
-                    {}
-                ).get("email"),
+                stripe_payment_id=data["payment_intent"],
+                customer_email=customer_email,
                 amount=amount,
                 status="succeeded",
                 risk_score=risk_score
@@ -117,6 +139,54 @@ async def stripe_webhook(request: Request):
             db.add(payment)
             db.commit()
             db.refresh(payment)
+
+            # =====================================
+            # Card Testing Detection
+            # =====================================
+
+            if customer_email:
+
+                card_testing_detected = (
+                    detect_card_testing(
+                        db,
+                        customer_email
+                    )
+                )
+
+                if card_testing_detected:
+
+                    existing_card_testing_alert = (
+                        db.query(Alert)
+                        .filter(
+                            Alert.alert_type ==
+                            "Card Testing"
+                        )
+                        .filter(
+                            Alert.status == "OPEN"
+                        )
+                        .first()
+                    )
+
+                    if not existing_card_testing_alert:
+
+                        card_testing_alert = Alert(
+                            payment_id=payment.id,
+                            alert_type="Card Testing",
+                            severity="HIGH",
+                            description=(
+                                "Multiple low-value "
+                                "transactions detected "
+                                "within 10 minutes"
+                            ),
+                            status="OPEN"
+                        )
+
+                        db.add(card_testing_alert)
+                        db.commit()
+
+            # =====================================
+            # Transaction Risk Alerts
+            # =====================================
 
             alert = determine_alert_type(
                 risk_score
@@ -130,7 +200,8 @@ async def stripe_webhook(request: Request):
                     payment_id=payment.id,
                     alert_type=alert_type,
                     severity=severity,
-                    description=description
+                    description=description,
+                    status="OPEN"
                 )
 
                 db.add(new_alert)

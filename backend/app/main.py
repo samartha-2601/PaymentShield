@@ -13,11 +13,13 @@ from app.api.webhooks import router as webhook_router
 from app.api.payments_data import router as payments_data_router
 from app.api.alerts import router as alerts_router
 from app.api.dashboard import router as dashboard_router
+from app.api.audit import router as audit_router
 
 
 import app.models.payment
 import app.models.alert
 import app.models.processed_event
+import app.models.audit_log
 
 app = FastAPI(
     title="PaymentShield API",
@@ -43,6 +45,7 @@ app.include_router(webhook_router)
 app.include_router(payments_data_router)
 app.include_router(alerts_router)
 app.include_router(dashboard_router)
+app.include_router(audit_router)
 
 @app.get("/")
 def root():

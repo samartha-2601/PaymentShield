@@ -8,11 +8,7 @@ function App() {
   const [payments, setPayments] = useState([]);
   const [alerts, setAlerts] = useState([]);
 
-  useEffect(() => {
-
-    api.get("/health/db")
-      .then(() => setDbStatus("Connected"))
-      .catch(() => setDbStatus("Disconnected"));
+  const loadDashboard = () => {
 
     api.get("/dashboard/summary")
       .then((response) => {
@@ -28,13 +24,61 @@ function App() {
       .then((response) => {
         setAlerts(response.data);
       });
+  };
+
+  useEffect(() => {
+
+    api.get("/health/db")
+      .then(() => setDbStatus("Connected"))
+      .catch(() => setDbStatus("Disconnected"));
+
+    loadDashboard();
 
   }, []);
+
+  const investigateAlert = async (alertId) => {
+
+    await api.put(
+      `/data/alerts/${alertId}/investigate`
+    );
+
+    loadDashboard();
+  };
+
+  const resolveAlert = async (alertId) => {
+
+    await api.put(
+      `/data/alerts/${alertId}/resolve`
+    );
+
+    loadDashboard();
+  };
+
+  const createPayment = async () => {
+
+    const response = await api.post(
+      "/payments/checkout"
+    );
+
+    window.location.href =
+      response.data.checkout_url;
+  };
 
   return (
     <div style={{ padding: "40px" }}>
 
       <h1>PaymentShield</h1>
+
+      <button
+        onClick={createPayment}
+        style={{
+          marginBottom: "20px",
+          padding: "10px 20px",
+          cursor: "pointer"
+        }}
+      >
+        Make Test Payment
+      </button>
 
       <h2>System Status</h2>
 
@@ -74,9 +118,13 @@ function App() {
           {payments.map((payment) => (
 
             <tr key={payment.id}>
+
               <td>{payment.email}</td>
+
               <td>${payment.amount}</td>
+
               <td>{payment.status}</td>
+
               <td
                 style={{
                   color:
@@ -90,6 +138,7 @@ function App() {
               >
                 {payment.risk_score}
               </td>
+
             </tr>
 
           ))}
@@ -97,7 +146,6 @@ function App() {
         </tbody>
 
       </table>
-
 
       <hr />
 
@@ -115,7 +163,9 @@ function App() {
           <tr>
             <th>Severity</th>
             <th>Type</th>
+            <th>Status</th>
             <th>Description</th>
+            <th>Actions</th>
           </tr>
         </thead>
 
@@ -124,9 +174,50 @@ function App() {
           {alerts.map((alert) => (
 
             <tr key={alert.id}>
+
               <td>{alert.severity}</td>
+
               <td>{alert.type}</td>
+
+              <td
+                style={{
+                  fontWeight: "bold",
+                  color:
+                    alert.status === "OPEN"
+                      ? "orange"
+                      : alert.status === "INVESTIGATING"
+                      ? "dodgerblue"
+                      : "limegreen"
+                }}
+              >
+                {alert.status}
+              </td>
+
               <td>{alert.description}</td>
+
+              <td>
+
+                <button
+                  onClick={() =>
+                    investigateAlert(alert.id)
+                  }
+                >
+                  Investigate
+                </button>
+
+                <button
+                  onClick={() =>
+                    resolveAlert(alert.id)
+                  }
+                  style={{
+                    marginLeft: "10px"
+                  }}
+                >
+                  Resolve
+                </button>
+
+              </td>
+
             </tr>
 
           ))}
@@ -134,8 +225,6 @@ function App() {
         </tbody>
 
       </table>
-
-
 
     </div>
   );

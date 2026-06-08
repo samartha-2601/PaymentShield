@@ -8,23 +8,18 @@ from datetime import datetime
 from app.models.base import Base
 
 
-class Alert(Base):
-    __tablename__ = "alerts"
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True)
 
-    payment_id = Column(Integer)
+    event_id = Column(String)
 
-    alert_type = Column(String)
+    event_type = Column(String)
 
-    severity = Column(String)
+    action = Column(String)
 
-    description = Column(String)
-
-    status = Column(
-        String,
-        default="OPEN"
-    )
+    message = Column(String)
 
     created_at = Column(
         DateTime,
